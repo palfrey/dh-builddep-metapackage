@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+
+import apt_pkg
+import sys
+from debian_bundle.deb822 import Packages,Sources
+from debian_bundle.changelog import Changelog
+from os.path import exists,join
+from os import makedirs,listdir
+from shutil import copyfile
+
+def get_source_pkg(pkg, records, depcache):
+	""" get the source package name of a given package """
+	version = depcache.get_candidate_ver(pkg)
+	if not version:
+		return None
+	file, index = version.file_list.pop(0)
+	records.lookup((file, index))
+	if records.source_pkg != "":
+		srcpkg = records.source_pkg
+	else:
+		srcpkg = pkg.name
+	return srcpkg
+
+apt_pkg.init()
+cache = apt_pkg.Cache()
+depcache = apt_pkg.DepCache(cache)
+depcache.init()
+records = apt_pkg.PackageRecords(cache)
+srcrecords = apt_pkg.SourceRecords()
+
+# base package that we use for build-depends calculation
+if len(sys.argv) < 2:
+	print "need a package name as argument"
+	sys.exit(1)
+try:
+	pkg = base = cache[sys.argv[1]]
+except KeyError:
+	print "No package %s found" % sys.argv[1]
+	sys.exit(1)
+
+# get the build depdends for the package itself
+srcpkg_name = get_source_pkg(base, records, depcache)
+#print "srcpkg_name: %s " % srcpkg_name
+if not srcpkg_name:
+	print "Can't find source package for '%s'" % pkg.Name
+	sys.exit(1)
+srcrec = srcrecords.lookup(srcpkg_name)
+
+src = Sources()
+src["Source"] = "%s-builddep"%pkg.name
+src["Section"] = "dev"
+src["Priority"] = "optional"
+src["Maintainer"] = "fixme <fixme@example.com>"
+src["Build-Depends"] = "debhelper (>= 4) "
+src["Standards-Version"] = "3.6.2"
+
+version = depcache.get_candidate_ver(pkg)
+genpkg = Packages()
+genpkg["Package"] = "%s-builddep"%pkg.name
+genpkg["Architecture"] = version.arch
+
+if srcrec:
+	bd = srcrecords.build_depends
+	for k in bd:
+		assert k.find("Build-") == 0,k
+		fieldname = "Depends"
+		if k not in genpkg:
+			genpkg[fieldname] = ""
+		for b in bd[k]:
+			assert len(b)==1,b
+			b = b[0]
+			dep = b[0]
+			if b[1] !="":
+				assert b[2]!="",b
+				dep += " (%s %s)"%(b[2],b[1])
+			if genpkg[fieldname] != "":
+				genpkg[fieldname] += ", "
+			genpkg[fieldname] += dep
+
+genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage depending on the packages needed to rebuild %s"%(pkg.name,pkg.name)
+
+if exists(pkg.name):
+	print "Existing destination folder!"
+	sys.exit(1)
+
+dest = "%s/debian"%pkg.name
+makedirs(dest)
+for f in listdir("template"):
+	copyfile(join("template",f),join(dest,f))
+
+control = open(join(dest,"control"),"w")
+
+control.write(src.dump())
+control.write("\n")
+control.write(genpkg.dump())
+control.close()
+
+cl = Changelog()
+cl.new_block()
+cl.package = "%s-builddep"%pkg.name
+cl.version = version.ver_str
+cl.distributions = "other"
+cl.urgency = 'low'
+cl.add_change('  * Dummy changelog')
+cl.author = src["Maintainer"]
+cl.date = 'Sat, 16 Jul 2008 11:11:08 -0200'
+
+cl.write_to_open_file(open(join(dest,"changelog"),"w"))

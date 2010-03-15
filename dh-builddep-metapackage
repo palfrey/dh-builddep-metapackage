@@ -1,60 +1,96 @@
 #!/usr/bin/env python
 
-import apt_pkg
 import sys
+import apt_pkg
+from apt.progress.text import OpProgress
 from debian_bundle.deb822 import Packages,Sources
 from debian_bundle.changelog import Changelog
 from os.path import exists,join
-from os import makedirs,listdir
+from os import makedirs,listdir,getenv,system
 from shutil import copyfile
+from optparse import OptionParser
+from time import strftime, gmtime
 
-def get_source_pkg(pkg, records, depcache):
+def get_source_pkg(pkg, records, depcache, wanted_version = None):
 	""" get the source package name of a given package """
-	version = depcache.get_candidate_ver(pkg)
+	
+	if wanted_version != None:
+		for ver in pkg.version_list:
+			if ver.ver_str == wanted_version:
+				version = ver
+				break
+		else:
+			version = None
+	else:
+		version = depcache.get_candidate_ver(pkg)
 	if not version:
-		return None
+		return (None,None)
 	file, index = version.file_list.pop(0)
 	records.lookup((file, index))
 	if records.source_pkg != "":
 		srcpkg = records.source_pkg
 	else:
 		srcpkg = pkg.name
-	return srcpkg
+	return (srcpkg, version)
+
+class InformativeOptionParser(OptionParser):
+    def error(self, msg):
+        """error(msg : string)
+
+        Print a usage message incorporating 'msg' to stderr and exit.
+        If you override this in a subclass, it should not return -- it
+        should either exit or raise an exception.
+        """
+        from sys import stderr,exit
+        stderr.write("%s: error: %s\n\n" % (self.get_prog_name(), msg))
+        print >>stderr,self.format_help()
+        exit(2)
+
+parser = InformativeOptionParser(usage="%prog [options] <package name>")
+parser.add_option("-o","--overwrite",dest="overwrite",default=False,action="store_true",help="Overwrite existing destination folder")
+parser.add_option("-n","--name",dest="name",default=getenv("DEBFULLNAME","Default name"), help="Maintainer name (Default: %s)"%getenv("DEBFULLNAME","Default name"))
+parser.add_option("-e","--email",dest="email",default=getenv("DEBEMAIL","fixme@invalid_email_path"),help="Maintainer email (Default: %s)"%getenv("DEBEMAIL","fixme@invalid_email_path"))
+parser.add_option("-v","--version",dest="version",default=None,help="Use package with specific version (Default: Use highest priority version)")
+parser.add_option("-b","--build",dest="build",default=False,action="store_true",help="Build the package with dpkg-buildpackage")
+(opts,args) = parser.parse_args()
+
+# base package that we use for build-depends calculation
+if len(args) != 1:
+	parser.error("need a package name as argument")
+
+class SilentProgress(OpProgress):
+    def update(self, percent=None):
+		pass
+
+sp = SilentProgress()
 
 apt_pkg.init()
-cache = apt_pkg.Cache()
+cache = apt_pkg.Cache(sp)
 depcache = apt_pkg.DepCache(cache)
 depcache.init()
 records = apt_pkg.PackageRecords(cache)
 srcrecords = apt_pkg.SourceRecords()
 
-# base package that we use for build-depends calculation
-if len(sys.argv) < 2:
-	print "need a package name as argument"
-	sys.exit(1)
 try:
-	pkg = base = cache[sys.argv[1]]
+	pkg = base = cache[args[0]]
 except KeyError:
-	print "No package %s found" % sys.argv[1]
-	sys.exit(1)
+	parser.error("No package %s found" % args[0])
 
 # get the build depdends for the package itself
-srcpkg_name = get_source_pkg(base, records, depcache)
+(srcpkg_name, version) = get_source_pkg(base, records, depcache, opts.version)
 #print "srcpkg_name: %s " % srcpkg_name
 if not srcpkg_name:
-	print "Can't find source package for '%s'" % pkg.Name
-	sys.exit(1)
+	parser.error("Can't find source package for '%s'" % pkg.name)
 srcrec = srcrecords.lookup(srcpkg_name)
 
 src = Sources()
 src["Source"] = "%s-builddep"%pkg.name
-src["Section"] = "dev"
+src["Section"] = "devel"
 src["Priority"] = "optional"
-src["Maintainer"] = "fixme <fixme@example.com>"
+src["Maintainer"] = "%s <%s>"%(opts.name,opts.email)
 src["Build-Depends"] = "debhelper (>= 4) "
 src["Standards-Version"] = "3.6.2"
 
-version = depcache.get_candidate_ver(pkg)
 genpkg = Packages()
 genpkg["Package"] = "%s-builddep"%pkg.name
 genpkg["Architecture"] = version.arch
@@ -66,25 +102,28 @@ if srcrec:
 		fieldname = "Depends"
 		if k not in genpkg:
 			genpkg[fieldname] = ""
-		for b in bd[k]:
-			assert len(b)==1,b
-			b = b[0]
-			dep = b[0]
-			if b[1] !="":
-				assert b[2]!="",b
-				dep += " (%s %s)"%(b[2],b[1])
+		for depend in bd[k]:
+			dep = ""
+			for b in depend:
+				if dep != "":
+					dep += " | "
+				dep += b[0]
+				if b[1] !="":
+					assert b[2]!="",b
+					dep += " (%s %s)"%(b[2],b[1])
 			if genpkg[fieldname] != "":
 				genpkg[fieldname] += ", "
 			genpkg[fieldname] += dep
 
 genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage depending on the packages needed to rebuild %s"%(pkg.name,pkg.name)
 
-if exists(pkg.name):
+if exists(pkg.name) and not opts.overwrite:
 	print "Existing destination folder!"
 	sys.exit(1)
 
 dest = "%s/debian"%pkg.name
-makedirs(dest)
+if not exists(dest):
+	makedirs(dest)
 for f in listdir("template"):
 	copyfile(join("template",f),join(dest,f))
 
@@ -103,6 +142,10 @@ cl.distributions = "other"
 cl.urgency = 'low'
 cl.add_change('  * Dummy changelog')
 cl.author = src["Maintainer"]
-cl.date = 'Sat, 16 Jul 2008 11:11:08 -0200'
+cl.date = strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
 
 cl.write_to_open_file(open(join(dest,"changelog"),"w"))
+
+if opts.build:
+	system("cd %s; dpkg-buildpackage"%pkg.name)
+

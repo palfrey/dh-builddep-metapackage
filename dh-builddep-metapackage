@@ -11,27 +11,6 @@ from shutil import copyfile
 from optparse import OptionParser
 from time import strftime, gmtime
 
-def get_source_pkg(pkg, records, depcache, wanted_version = None):
-	""" get the source package name of a given package """
-	
-	if wanted_version != None:
-		for ver in pkg.version_list:
-			if ver.ver_str == wanted_version:
-				version = ver
-				break
-		else:
-			version = None
-	else:
-		version = depcache.get_candidate_ver(pkg)
-	if not version:
-		return (None,None)
-	file, index = version.file_list.pop(0)
-	records.lookup((file, index))
-	if records.source_pkg != "":
-		srcpkg = records.source_pkg
-	else:
-		srcpkg = pkg.name
-	return (srcpkg, version)
 
 class InformativeOptionParser(OptionParser):
     def error(self, msg):
@@ -76,11 +55,31 @@ try:
 except KeyError:
 	parser.error("No package %s found" % args[0])
 
-# get the build depdends for the package itself
-(srcpkg_name, version) = get_source_pkg(base, records, depcache, opts.version)
-#print "srcpkg_name: %s " % srcpkg_name
+# get the build depends for the package itself
+if opts.version != None:
+	for ver in base.version_list:
+		if ver.ver_str == opts.version:
+			version = ver
+			break
+	else:
+		version = None
+else:
+	version = depcache.get_candidate_ver(base)
+if version:
+	file, index = version.file_list.pop(0)
+	records.lookup((file, index))
+	if records.source_pkg != "":
+		srcpkg_name = records.source_pkg
+	else:
+		srcpkg_name = pkg.name
+else:
+	srcpkg_name = None
 if not srcpkg_name:
-	parser.error("Can't find source package for '%s'" % pkg.name)
+	if not opts.version or depcache.get_candidate_ver(base) == None:
+		parser.error("Can't find source package for '%s'" % pkg.name)
+	else:
+		parser.error("Can't find version %s. Can find %s"%(opts.version,", ".join([ver.ver_str for ver in base.version_list])))
+
 srcrec = srcrecords.lookup(srcpkg_name)
 
 src = Sources()

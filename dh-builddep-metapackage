@@ -11,6 +11,9 @@ from shutil import copyfile
 from optparse import OptionParser
 from time import strftime, gmtime
 
+template_dir = "template"
+if not exists(template_dir):
+	template_dir = "/usr/share/dh-builddep-metapackage/template/"
 
 class InformativeOptionParser(OptionParser):
     def error(self, msg):
@@ -123,8 +126,8 @@ if exists(pkg.name) and not opts.overwrite:
 dest = "%s/debian"%pkg.name
 if not exists(dest):
 	makedirs(dest)
-for f in listdir("template"):
-	copyfile(join("template",f),join(dest,f))
+for f in listdir(template_dir):
+	copyfile(join(template_dir,f),join(dest,f))
 
 control = open(join(dest,"control"),"w")
 

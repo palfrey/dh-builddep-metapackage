@@ -28,7 +28,7 @@ class InformativeOptionParser(OptionParser):
         print >>stderr,self.format_help()
         exit(2)
 
-parser = InformativeOptionParser(usage="%prog [options] <package name>")
+parser = InformativeOptionParser(usage="%prog [options] <package name>", description="Builds build-dep metapackages in order to ease package management for package rebuilders")
 parser.add_option("-o","--overwrite",dest="overwrite",default=False,action="store_true",help="Overwrite existing destination folder")
 parser.add_option("-n","--name",dest="name",default=getenv("DEBFULLNAME","Default name"), help="Maintainer name (Default: %s)"%getenv("DEBFULLNAME","Default name"))
 parser.add_option("-e","--email",dest="email",default=getenv("DEBEMAIL","fixme@invalid_email_path"),help="Maintainer email (Default: %s)"%getenv("DEBEMAIL","fixme@invalid_email_path"))

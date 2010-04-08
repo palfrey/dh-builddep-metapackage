@@ -1,0 +1,14 @@
+Source: dh-builddep-metapackage
+Section: devel
+Priority: extra
+Maintainer: Tom Parker <palfrey@tevp.net>
+Build-Depends: cdbs (>= 0.4.49), debhelper (>= 7), python-support (>= 0.5.3)
+Standards-Version: 3.7.3
+Homepage: http://github.com/palfrey/dh-builddep-metapackage
+
+Package: dh-builddep-metapackage
+Architecture: all
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends}, python-apt, python-debian, dpkg-dev
+Description: Makes build-dependancy metapackages for Debian packages
+ dh-builddep-metapackage takes existing Debian packages and creates 
+ metapackages that depend on all of the Build-Depends of the package.

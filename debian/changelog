@@ -1,0 +1,6 @@
+dh-builddep-metapackage (0.1-1) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Tom Parker <tparker@lshift.net>  Mon, 15 Mar 2010 16:50:53 +0000
+

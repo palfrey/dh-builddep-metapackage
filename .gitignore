@@ -1,2 +1,4 @@
-*.deb
-*.changes
+build
+debian/files
+debian/dh-builddep-metapackage*
+python-build-stamp-*

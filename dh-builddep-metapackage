@@ -119,11 +119,13 @@ if srcrec:
 
 genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage depending on the packages needed to rebuild %s"%(pkg.name,pkg.name)
 
-if exists(pkg.name) and not opts.overwrite:
+foldername = "%s-%s"%(pkg.name,version.ver_str)
+
+if exists(foldername) and not opts.overwrite:
 	print "Existing destination folder!"
 	sys.exit(1)
 
-dest = "%s/debian"%pkg.name
+dest = "%s/debian"%foldername
 if not exists(dest):
 	makedirs(dest)
 for f in listdir(template_dir):
@@ -149,5 +151,5 @@ cl.date = strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
 cl.write_to_open_file(open(join(dest,"changelog"),"w"))
 
 if opts.build:
-	system("cd %s; dpkg-buildpackage"%pkg.name)
+	system("cd %s; dpkg-buildpackage"%foldername)
 

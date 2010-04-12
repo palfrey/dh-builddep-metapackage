@@ -122,7 +122,7 @@ genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage d
 foldername = "%s-%s"%(pkg.name,version.ver_str)
 
 if exists(foldername) and not opts.overwrite:
-	print "Existing destination folder!"
+	print "Existing destination folder '%s'!"%foldername
 	sys.exit(1)
 
 dest = "%s/debian"%foldername

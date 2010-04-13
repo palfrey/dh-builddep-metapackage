@@ -3,7 +3,7 @@
 import sys
 import apt_pkg
 from apt.progress.text import OpProgress
-from debian_bundle.deb822 import Packages,Sources
+from debian_bundle.deb822 import Packages,Sources,Deb822,_PkgRelationMixin
 from debian_bundle.changelog import Changelog
 from os.path import exists,join
 from os import makedirs,listdir,getenv,system
@@ -34,11 +34,19 @@ parser.add_option("-n","--name",dest="name",default=getenv("DEBFULLNAME","Defaul
 parser.add_option("-e","--email",dest="email",default=getenv("DEBEMAIL","fixme@invalid_email_path"),help="Maintainer email (Default: %s)"%getenv("DEBEMAIL","fixme@invalid_email_path"))
 parser.add_option("-v","--version",dest="version",default=None,help="Use package with specific version (Default: Use highest priority version)")
 parser.add_option("-b","--build",dest="build",default=False,action="store_true",help="Build the package with dpkg-buildpackage")
+parser.add_option("-w","--working-directory",dest="use_working",default=False,action="store_true",help="Use working directory as a source of package data. Assumes we're in a folder with a 'debian' subdirectory")
 (opts,args) = parser.parse_args()
+
+if opts.use_working:
+	debian_path = "debian"
+	controls = list(Deb822.iter_paragraphs(open(join(debian_path,"control"))))
 
 # base package that we use for build-depends calculation
 if len(args) != 1:
-	parser.error("need a package name as argument")
+	if opts.use_working:
+		parser.error("need a package name as argument. Options are: "+", ".join(x["Package"] for x in controls if "Package" in x.keys()))
+	else:
+		parser.error("need a package name as argument")
 
 class SilentProgress(OpProgress):
     def update(self, percent=None):
@@ -53,10 +61,17 @@ depcache.init()
 records = apt_pkg.PackageRecords(cache)
 srcrecords = apt_pkg.SourceRecords()
 
-try:
-	pkg = base = cache[args[0]]
-except KeyError:
-	parser.error("No package %s found" % args[0])
+if opts.use_working:
+	binary_name = args[0]
+	assert "Source" in controls[0]
+	source = controls[0]
+	binaries = controls[1:]
+else:
+	try:
+		pkg = base = cache[args[0]]
+		binary_name = pkg.name
+	except KeyError:
+		parser.error("No package %s found" % args[0])
 
 # get the build depends for the package itself
 if opts.version != None:
@@ -67,14 +82,32 @@ if opts.version != None:
 	else:
 		version = None
 else:
-	version = depcache.get_candidate_ver(base)
-if version:
-	file, index = version.file_list.pop(0)
-	records.lookup((file, index))
-	if records.source_pkg != "":
-		srcpkg_name = records.source_pkg
+	if opts.use_working:
+		changelog = Changelog(open(join(debian_path,"changelog")))
+		version = changelog.version
 	else:
-		srcpkg_name = pkg.name
+		version = depcache.get_candidate_ver(base)
+
+if version:
+	if opts.use_working:
+		srcpkg_name = source["Source"]
+		for x in binaries:
+			if "Package" not in x:
+				continue
+			if x["Package"] == binary_name:
+				arch = x["Architecture"]
+				break
+		else:
+			parser.error(("'%s' isn't a valid binary name!. Options are: "%binary_name)+", ".join(x["Package"] for x in controls if "Package" in x.keys()))
+	else:
+		file, index = version.file_list.pop(0)
+		records.lookup((file, index))
+		if records.source_pkg != "":
+			srcpkg_name = records.source_pkg
+		else:
+			srcpkg_name = pkg.name
+		arch = version.arch
+		version = version.ver_str
 else:
 	srcpkg_name = None
 if not srcpkg_name:
@@ -83,10 +116,11 @@ if not srcpkg_name:
 	else:
 		parser.error("Can't find version %s. Can find %s"%(opts.version,", ".join([ver.ver_str for ver in base.version_list])))
 
-srcrec = srcrecords.lookup(srcpkg_name)
+if not opts.use_working:
+	srcrec = srcrecords.lookup(srcpkg_name)
 
 src = Sources()
-src["Source"] = "%s-builddep"%pkg.name
+src["Source"] = "%s-builddep"%binary_name
 src["Section"] = "devel"
 src["Priority"] = "optional"
 src["Maintainer"] = "%s <%s>"%(opts.name,opts.email)
@@ -94,32 +128,59 @@ src["Build-Depends"] = "debhelper (>= 4) "
 src["Standards-Version"] = "3.6.2"
 
 genpkg = Packages()
-genpkg["Package"] = "%s-builddep"%pkg.name
-genpkg["Architecture"] = version.arch
+genpkg["Package"] = "%s-builddep"%binary_name
+genpkg["Architecture"] = arch
 
-if srcrec:
-	bd = srcrecords.build_depends
-	for k in bd:
-		assert k.find("Build-") == 0,k
-		fieldname = "Depends"
-		if k not in genpkg:
-			genpkg[fieldname] = ""
-		for depend in bd[k]:
-			dep = ""
-			for b in depend:
-				if dep != "":
-					dep += " | "
-				dep += b[0]
-				if b[1] !="":
-					assert b[2]!="",b
-					dep += " (%s %s)"%(b[2],b[1])
-			if genpkg[fieldname] != "":
-				genpkg[fieldname] += ", "
-			genpkg[fieldname] += dep
+class BuildDepends(Deb822, _PkgRelationMixin):
+    _relationship_fields = [ 'build-depends', 'build-depends-indep',
+            'build-conflicts', 'build-conflicts-indep']
 
-genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage depending on the packages needed to rebuild %s"%(pkg.name,pkg.name)
+    def __init__(self, *args, **kwargs):
+        Deb822.__init__(self, *args, **kwargs)
+        _PkgRelationMixin.__init__(self, *args, **kwargs)
 
-foldername = "%s-%s"%(pkg.name,version.ver_str)
+if opts.use_working:
+	bd = {}
+	for section in BuildDepends(source).relations.keys():
+		newsect = []
+		for rel in BuildDepends(source).relations[section]:
+			assert len(rel) == 1,rel
+			rel = rel[0]
+			add = [rel['name']]
+			if rel['version'] == None:
+				add.extend(('',''))
+			else:
+				add.extend((rel['version'][1],rel['version'][0]))
+
+			newsect.append([tuple(add)])
+		bd[section] = newsect
+else:
+	if srcrec:
+		bd = srcrecords.build_depends
+	else:
+		bd = {}
+
+for k in bd:
+	assert k.lower().find("build-") == 0,k
+	fieldname = "Depends"
+	if k not in genpkg:
+		genpkg[fieldname] = ""
+	for depend in bd[k]:
+		dep = ""
+		for b in depend:
+			if dep != "":
+				dep += " | "
+			dep += b[0]
+			if b[1] !="":
+				assert b[2]!="",b
+				dep += " (%s %s)"%(b[2],b[1])
+		if genpkg[fieldname] != "":
+			genpkg[fieldname] += ", "
+		genpkg[fieldname] += dep
+
+genpkg["Description"] = "Build dependencies to make %s\n This is a metapackage depending on the packages needed to rebuild %s"%(binary_name,binary_name)
+
+foldername = "%s-%s"%(binary_name,version)
 
 if exists(foldername) and not opts.overwrite:
 	print "Existing destination folder '%s'!"%foldername
@@ -140,8 +201,8 @@ control.close()
 
 cl = Changelog()
 cl.new_block()
-cl.package = "%s-builddep"%pkg.name
-cl.version = version.ver_str
+cl.package = "%s-builddep"%binary_name
+cl.version = version
 cl.distributions = "other"
 cl.urgency = 'low'
 cl.add_change('  * Dummy changelog')

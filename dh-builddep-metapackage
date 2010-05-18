@@ -3,8 +3,14 @@
 import sys
 import apt_pkg
 from apt.progress.text import OpProgress
-from debian_bundle.deb822 import Packages,Sources,Deb822,_PkgRelationMixin
-from debian_bundle.changelog import Changelog
+
+try:
+	from debian.deb822 import Packages,Sources,Deb822,_PkgRelationMixin
+	from debian.changelog import Changelog
+except ImportError,e:
+	from debian_bundle.deb822 import Packages,Sources,Deb822,_PkgRelationMixin
+	from debian_bundle.changelog import Changelog
+
 from os.path import exists,join
 from os import makedirs,listdir,getenv,system
 from shutil import copyfile

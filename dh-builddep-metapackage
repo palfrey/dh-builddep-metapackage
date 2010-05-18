@@ -124,6 +124,8 @@ if not srcpkg_name:
 
 if not opts.use_working:
 	srcrec = srcrecords.lookup(srcpkg_name)
+	if not srcrec:
+		parser.error("Can't find source package %s"%srcpkg_name)
 
 src = Sources()
 src["Source"] = "%s-builddep"%binary_name

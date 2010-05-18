@@ -1,6 +1,12 @@
+dh-builddep-metapackage (0.2) unstable; urgency=low
+
+  * Add support for building using data from local debian/ folders
+
+ -- Tom Parker <palfrey@tevp.net>  Thu, 15 Apr 2010 11:11:50 +0100
+
 dh-builddep-metapackage (0.1-1) unstable; urgency=low
 
-  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+  * Initial release
 
  -- Tom Parker <tparker@lshift.net>  Mon, 15 Mar 2010 16:50:53 +0000
 

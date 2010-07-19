@@ -152,15 +152,15 @@ if opts.use_working:
 	for section in BuildDepends(source).relations.keys():
 		newsect = []
 		for rel in BuildDepends(source).relations[section]:
-			assert len(rel) == 1,rel
-			rel = rel[0]
-			add = [rel['name']]
-			if rel['version'] == None:
-				add.extend(('',''))
-			else:
-				add.extend((rel['version'][1],rel['version'][0]))
-
-			newsect.append([tuple(add)])
+			adds = []
+			for r in rel:
+				add = [r['name']]
+				if r['version'] == None:
+					add.extend(('',''))
+				else:
+					add.extend((r['version'][1],r['version'][0]))
+				adds.append(tuple(add))
+			newsect.append(adds)
 		bd[section] = newsect
 else:
 	if srcrec:

@@ -171,7 +171,7 @@ else:
 for k in bd:
 	assert k.lower().find("build-") == 0,k
 	fieldname = "Depends"
-	if k not in genpkg:
+	if fieldname not in genpkg:
 		genpkg[fieldname] = ""
 	for depend in bd[k]:
 		dep = ""

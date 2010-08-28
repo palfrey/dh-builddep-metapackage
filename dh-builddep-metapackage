@@ -11,13 +11,14 @@ except ImportError,e:
 	from debian_bundle.deb822 import Packages,Sources,Deb822,_PkgRelationMixin
 	from debian_bundle.changelog import Changelog
 
-from os.path import exists,join
+from os.path import exists,join,dirname
 from os import makedirs,listdir,getenv,system
 from shutil import copyfile
 from optparse import OptionParser
 from time import strftime, gmtime
+from sys import argv
 
-template_dir = "template"
+template_dir = join(dirname(argv[0]),"template")
 if not exists(template_dir):
 	template_dir = "/usr/share/dh-builddep-metapackage/template/"
 

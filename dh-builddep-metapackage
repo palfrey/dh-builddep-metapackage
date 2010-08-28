@@ -13,7 +13,7 @@ except ImportError,e:
 
 from os.path import exists,join,dirname
 from os import makedirs,listdir,getenv,system
-from shutil import copyfile
+from shutil import copytree, rmtree
 from optparse import OptionParser
 from time import strftime, gmtime
 from sys import argv
@@ -196,10 +196,10 @@ if exists(foldername) and not opts.overwrite:
 	sys.exit(1)
 
 dest = "%s/debian"%foldername
-if not exists(dest):
-	makedirs(dest)
-for f in listdir(template_dir):
-	copyfile(join(template_dir,f),join(dest,f))
+if exists(dest):
+	rmtree(dest)
+
+copytree(template_dir, dest)
 
 control = open(join(dest,"control"),"w")
 

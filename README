@@ -28,5 +28,8 @@ Options:
                         Use package with specific version (Default: Use
                         highest priority version)
   -b, --build           Build the package with dpkg-buildpackage
+  -w, --working-directory
+                        Use working directory as a source of package data.
+                        Assumes we're in a folder with a 'debian' subdirectory
 
 # vim: set textwidth=80:

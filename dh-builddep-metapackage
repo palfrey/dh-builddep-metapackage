@@ -51,7 +51,11 @@ if opts.use_working:
 # base package that we use for build-depends calculation
 if len(args) != 1:
 	if opts.use_working:
-		parser.error("need a package name as argument. Options are: "+", ".join(x["Package"] for x in controls if "Package" in x.keys()))
+		packages = [x["Package"] for x in controls if "Package" in x.keys()]
+		if len(packages) == 1:
+			args = packages
+		else:
+			parser.error("need a package name as argument. Options are: "+", ".join(packages))
 	else:
 		parser.error("need a package name as argument")
 

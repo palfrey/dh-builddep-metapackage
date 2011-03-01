@@ -128,9 +128,12 @@ if not srcpkg_name:
 		parser.error("Can't find version %s. Can find %s"%(opts.version,", ".join([ver.ver_str for ver in base.version_list])))
 
 if not opts.use_working:
-	srcrec = srcrecords.lookup(srcpkg_name)
-	if not srcrec:
-		parser.error("Can't find source package %s"%srcpkg_name)
+	while True:
+		s = srcrecords.lookup(srcpkg_name)
+		if not s:
+			parser.error("Can't find source package %s"%srcpkg_name)
+		if srcrecords.version == version:
+			break
 
 src = Sources()
 src["Source"] = "%s-builddep"%binary_name
@@ -177,15 +180,14 @@ if opts.use_working:
 else:
 	bd = {}
 	bc = {}
-	if srcrec:
-		base = srcrecords.build_depends
-		for k in base:
-			if k in ("Build-Depends", "Build-Depends-Indep"):
-				bd[k] = base[k]
-			elif k in ("Build-Conflicts", "Build-Conflicts-Indep"):
-				bc[k] = base[k]
-			else:
-				raise Exception, k
+	base = srcrecords.build_depends
+	for k in base:
+		if k in ("Build-Depends", "Build-Depends-Indep"):
+			bd[k] = base[k]
+		elif k in ("Build-Conflicts", "Build-Conflicts-Indep"):
+			bc[k] = base[k]
+		else:
+			raise Exception, k
 
 def genControlFields(fieldname, bd):
 	for k in bd:

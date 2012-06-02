@@ -169,6 +169,7 @@ def buildDependsList(kind):
 					add.extend(('',''))
 				else:
 					add.extend((r['version'][1],r['version'][0]))
+				add.append(r['arch'])
 				adds.append(tuple(add))
 			newsect.append(adds)
 		bd[section] = newsect
@@ -203,6 +204,12 @@ def genControlFields(fieldname, bd):
 				if b[1] !="":
 					assert b[2]!="",b
 					dep += " (%s %s)"%(b[2],b[1])
+				if b[3] != None:
+					for (value, arch) in b[3]:
+						dep += " ["
+						if not value:
+							dep += "!"
+						dep += arch + "]"
 			if genpkg[fieldname] != "":
 				genpkg[fieldname] += ", "
 			genpkg[fieldname] += dep

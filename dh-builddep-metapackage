@@ -42,6 +42,7 @@ parser.add_option("-e","--email",dest="email",default=getenv("DEBEMAIL","fixme@i
 parser.add_option("-v","--version",dest="version",default=None,help="Use package with specific version (Default: Use highest priority version)")
 parser.add_option("-b","--build",dest="build",default=False,action="store_true",help="Build the package with dpkg-buildpackage")
 parser.add_option("-w","--working-directory",dest="use_working",default=False,action="store_true",help="Use working directory as a source of package data. Assumes we're in a folder with a 'debian' subdirectory")
+parser.add_option("-a","--architecture", dest="architecture", default = None, help="Architecture, used with --build (Default: current machine architecture)")
 (opts,args) = parser.parse_args()
 
 if opts.use_working:
@@ -251,5 +252,8 @@ cl.date = strftime("%a, %d %b %Y %H:%M:%S +0000", gmtime())
 cl.write_to_open_file(open(join(dest,"changelog"),"w"))
 
 if opts.build:
-	system("cd %s; dpkg-buildpackage"%foldername)
+	if opts.architecture != None:
+		system("cd %s; dpkg-buildpackage -a%s"%(foldername, opts.architecture))
+	else:
+		system("cd %s; dpkg-buildpackage"%foldername)
 
